@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LGU Traffic Dashboard — Logic Prototype</title>
+<style>
+  :root {
+    --accent: #2563eb;
+    --accent-light: #dbeafe;
+    --danger: #dc2626;
+    --warning: #f59e0b;
+    --success: #16a34a;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --muted: #64748b;
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
+  .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 2rem; }
+  .prototype-badge {
+    display: inline-block;
+    background: var(--warning);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
+    margin-left: 0.5rem;
+  }
+
+  /* State Panel */
+  .state-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .state-panel h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--accent); }
+  .grid-display {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+  }
+  .intersection-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .intersection-card.changed {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-light);
+  }
+  .intersection-card .name { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.4rem; }
+  .intersection-card .stats { font-size: 0.8rem; color: var(--muted); }
+  .intersection-card .stats span { display: block; margin-bottom: 0.15rem; }
+  .congestion-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+  }
+  .congestion-free { background: #dcfce7; color: #166534; }
+  .congestion-moderate { background: #fef9c3; color: #854d0e; }
+  .congestion-heavy { background: #fed7aa; color: #9a3412; }
+  .congestion-gridlock { background: #fecaca; color: #991b1b; }
+  .status-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    margin-left: 0.3rem;
+  }
+  .status-closed { background: #fecaca; color: #991b1b; }
+  .status-accident { background: #fde68a; color: #92400e; }
+
+  /* Action Log */
+  .log-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .log-panel h3 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--muted); }
+  .log-entry { font-size: 0.8rem; color: var(--muted); padding: 0.15rem 0; border-bottom: 1px solid var(--border); }
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry .timestamp { color: var(--accent); font-weight: 500; }
+
+  /* Controls */
+  .controls-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .controls-section h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; }
+  .control-group { margin-bottom: 1rem; }
+  .control-group label { font-size: 0.8rem; font-weight: 600; color: var(--muted); display: block; margin-bottom: 0.4rem; }
+  .control-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  select, input[type="number"] {
+    font-family: var(--font);
+    font-size: 0.85rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #fff;
+  }
+  button {
+    font-family: var(--font);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.45rem 0.9rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.85; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-warning { background: var(--warning); color: #fff; }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-neutral { background: #475569; color: #fff; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 1rem; }
+  .tab {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border: none;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .scenario-desc { font-size: 0.85rem; color: var(--muted); margin-bottom: 1rem; line-height: 1.5; }
+  .scenario-steps { list-style: none; }
+  .scenario-steps li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0;
+    font-size: 0.85rem;
+  }
+  .scenario-steps li.done { opacity: 0.5; text-decoration: line-through; }
+  .step-num {
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background: var(--accent-light);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<h1>LGU Traffic & Congestion Dashboard <span class="prototype-badge">Prototype — Throwaway</span></h1>
+<p class="subtitle">
+  <strong>Question being tested:</strong> Does our state model correctly handle vehicle redistribution when intersections close,
+  accidents reduce capacity, and congestion cascades across neighboring roads in the Cebu City grid?
+</p>
+
+<!-- VISUAL MAP -->
+<div class="state-panel">
+  <h2>Traffic Network Map — Cebu City</h2>
+  <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;">
+    Nodes = intersections (color = congestion level). Lines = road connections. Click any node to select it in the controls below.
+  </p>
+  <svg id="traffic-map" viewBox="0 0 700 420" style="width:100%; height:auto; max-height:420px; border:1px solid var(--border); border-radius:6px; background:#f1f5f9;">
+    <!-- Roads (drawn first, underneath nodes) -->
+    <g id="map-roads"></g>
+    <!-- Nodes -->
+    <g id="map-nodes"></g>
+  </svg>
+  <div style="display:flex; gap:1rem; margin-top:0.75rem; flex-wrap:wrap;">
+    <span style="font-size:0.75rem; color:var(--muted);">
+      <span style="display:inline-block;width:12px;height:12px;background:#22c55e;border-radius:50%;vertical-align:middle;"></span> Free Flow
+    </span>
+    <span style="font-size:0.75rem; color:var(--muted);">
+      <span style="display:inline-block;width:12px;height:12px;background:#eab308;border-radius:50%;vertical-align:middle;"></span> Moderate
+    </span>
+    <span style="font-size:0.75rem; color:var(--muted);">
+      <span style="display:inline-block;width:12px;height:12px;background:#f97316;border-radius:50%;vertical-align:middle;"></span> Heavy
+    </span>
+    <span style="font-size:0.75rem; color:var(--muted);">
+      <span style="display:inline-block;width:12px;height:12px;background:#ef4444;border-radius:50%;vertical-align:middle;"></span> Gridlock
+    </span>
+    <span style="font-size:0.75rem; color:var(--muted);">
+      <span style="display:inline-block;width:12px;height:12px;background:#94a3b8;border-radius:50%;vertical-align:middle;"></span> Closed
+    </span>
+  </div>
+</div>
+
+<!-- STATE PANEL -->
+<div class="state-panel">
+  <h2>Intersection Details</h2>
+  <div class="grid-display" id="grid-display"></div>
+</div>
+
+<!-- ACTION LOG -->
+<div class="log-panel">
+  <h3>Action Log</h3>
+  <div id="action-log"><div class="log-entry">System initialized with default traffic state.</div></div>
+</div>
+
+<!-- FREE-PLAY CONTROLS -->
+<div class="controls-section">
+  <h2>Free-Play Controls</h2>
+
+  <div class="control-group">
+    <label>Add / Remove Vehicles</label>
+    <div class="control-row">
+      <select id="sel-intersection"></select>
+      <input type="number" id="vehicle-count" value="20" min="1" max="200" style="width:70px">
+      <button class="btn-primary" onclick="doAction('ADD_VEHICLES')">Add Vehicles</button>
+      <button class="btn-neutral" onclick="doAction('REMOVE_VEHICLES')">Remove Vehicles</button>
+    </div>
+  </div>
+
+  <div class="control-group">
+    <label>Intersection Status</label>
+    <div class="control-row">
+      <select id="sel-status-intersection"></select>
+      <button class="btn-danger" onclick="doAction('CLOSE_INTERSECTION')">Close Intersection</button>
+      <button class="btn-warning" onclick="doAction('REPORT_ACCIDENT')">Report Accident</button>
+      <button class="btn-success" onclick="doAction('OPEN_INTERSECTION')">Reopen / Clear</button>
+    </div>
+  </div>
+
+  <div class="control-group">
+    <label>Simulation</label>
+    <div class="control-row">
+      <button class="btn-primary" onclick="doAction('TIME_TICK')">Advance Time (1 cycle)</button>
+      <button class="btn-neutral" onclick="doAction('RESET')">Reset to Initial State</button>
+    </div>
+  </div>
+</div>
+
+<!-- GUIDED WALKTHROUGHS -->
+<div class="controls-section">
+  <h2>Guided Walkthroughs</h2>
+  <div class="tabs" id="scenario-tabs"></div>
+  <div id="scenario-panels"></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PURE LOGIC MODULE — no DOM references, liftable to real code -->
+<!-- ============================================================ -->
+<script>
+const TrafficEngine = (() => {
+  "use strict";
+
+  // --- Data: Cebu City intersection network ---
+  const INTERSECTIONS = [
+    { id: "colon-osmena",    name: "Colon × Osmeña Blvd",   capacity: 120 },
+    { id: "fuente-osmena",   name: "Fuente Osmeña Circle",  capacity: 150 },
+    { id: "mango-jones",     name: "Mango Ave × Gen. Maxilom", capacity: 100 },
+    { id: "srp-mambaling",   name: "SRP × Mambaling",       capacity: 180 },
+    { id: "banilad-talamban",name: "Banilad × Talamban Rd",  capacity: 130 },
+    { id: "capitol-escario", name: "Capitol × Escario",      capacity: 110 },
+  ];
+
+  // Adjacency: which intersections overflow into which when closed/overloaded
+  const ADJACENCY = {
+    "colon-osmena":     ["fuente-osmena", "mango-jones"],
+    "fuente-osmena":    ["colon-osmena", "capitol-escario", "mango-jones"],
+    "mango-jones":      ["fuente-osmena", "colon-osmena", "capitol-escario"],
+    "srp-mambaling":    ["colon-osmena", "banilad-talamban"],
+    "banilad-talamban": ["srp-mambaling", "capitol-escario"],
+    "capitol-escario":  ["fuente-osmena", "mango-jones", "banilad-talamban"],
+  };
+
+  // Congestion thresholds (percentage of capacity)
+  function congestionLevel(vehicles, capacity) {
+    const ratio = vehicles / capacity;
+    if (ratio < 0.4) return "Free Flow";
+    if (ratio < 0.7) return "Moderate";
+    if (ratio < 0.95) return "Heavy";
+    return "Gridlock";
+  }
+
+  function createInitialState() {
+    const intersections = {};
+    INTERSECTIONS.forEach(def => {
+      intersections[def.id] = {
+        id: def.id,
+        name: def.name,
+        capacity: def.capacity,
+        vehicles: Math.floor(def.capacity * 0.3), // start at ~30% load
+        status: "Open", // Open | Closed | Accident
+      };
+    });
+    return { intersections, tick: 0 };
+  }
+
+  function getEffectiveCapacity(intersection) {
+    if (intersection.status === "Closed") return 0;
+    if (intersection.status === "Accident") return Math.floor(intersection.capacity * 0.4);
+    return intersection.capacity;
+  }
+
+  function redistributeOverflow(state, sourceId, overflowAmount) {
+    // Distribute overflow to adjacent open intersections
+    const neighbors = ADJACENCY[sourceId] || [];
+    const openNeighbors = neighbors.filter(nId => state.intersections[nId].status !== "Closed");
+    if (openNeighbors.length === 0) return state; // nowhere to go — vehicles are stuck
+
+    const perNeighbor = Math.ceil(overflowAmount / openNeighbors.length);
+    const newState = JSON.parse(JSON.stringify(state));
+
+    openNeighbors.forEach(nId => {
+      newState.intersections[nId].vehicles += perNeighbor;
+      // Cap: vehicles can exceed capacity (that's what creates gridlock)
+    });
+
+    return newState;
+  }
+
+  // --- Reducer ---
+  function reduce(state, action) {
+    let newState = JSON.parse(JSON.stringify(state));
+
+    switch (action.type) {
+      case "ADD_VEHICLES": {
+        const inter = newState.intersections[action.intersectionId];
+        if (!inter) return state;
+        inter.vehicles += action.count;
+        return newState;
+      }
+
+      case "REMOVE_VEHICLES": {
+        const inter = newState.intersections[action.intersectionId];
+        if (!inter) return state;
+        inter.vehicles = Math.max(0, inter.vehicles - action.count);
+        return newState;
+      }
+
+      case "CLOSE_INTERSECTION": {
+        const inter = newState.intersections[action.intersectionId];
+        if (!inter || inter.status === "Closed") return state;
+        const strandedVehicles = inter.vehicles;
+        inter.status = "Closed";
+        inter.vehicles = 0;
+        // Redistribute stranded vehicles to neighbors
+        newState = redistributeOverflow(newState, action.intersectionId, strandedVehicles);
+        return newState;
+      }
+
+      case "REPORT_ACCIDENT": {
+        const inter = newState.intersections[action.intersectionId];
+        if (!inter || inter.status === "Closed") return state;
+        inter.status = "Accident";
+        // Reduce effective capacity — overflow excess vehicles
+        const effectiveCap = getEffectiveCapacity(inter);
+        if (inter.vehicles > effectiveCap) {
+          const overflow = inter.vehicles - effectiveCap;
+          inter.vehicles = effectiveCap;
+          newState = redistributeOverflow(newState, action.intersectionId, overflow);
+        }
+        return newState;
+      }
+
+      case "OPEN_INTERSECTION": {
+        const inter = newState.intersections[action.intersectionId];
+        if (!inter || inter.status === "Open") return state;
+        inter.status = "Open";
+        return newState;
+      }
+
+      case "TIME_TICK": {
+        newState.tick += 1;
+        // Natural flow: each intersection loses some vehicles (they leave the grid)
+        // and gains some from general city traffic inflow
+        Object.values(newState.intersections).forEach(inter => {
+          if (inter.status === "Closed") return;
+          // Outflow: 10-15% leave
+          const outflow = Math.floor(inter.vehicles * (0.10 + Math.random() * 0.05));
+          // Inflow: base rate proportional to capacity
+          const inflow = Math.floor(inter.capacity * (0.05 + Math.random() * 0.08));
+          inter.vehicles = Math.max(0, inter.vehicles - outflow + inflow);
+        });
+
+        // Cascade check: if any intersection exceeds capacity, overflow to neighbors
+        Object.values(newState.intersections).forEach(inter => {
+          const effCap = getEffectiveCapacity(inter);
+          if (effCap > 0 && inter.vehicles > effCap) {
+            const overflow = Math.floor((inter.vehicles - effCap) * 0.3); // only 30% spills
+            inter.vehicles -= overflow;
+            newState = redistributeOverflow(newState, inter.id, overflow);
+          }
+        });
+
+        return newState;
+      }
+
+      case "RESET":
+        return createInitialState();
+
+      default:
+        return state;
+    }
+  }
+
+  // Public API
+  return {
+    INTERSECTIONS,
+    ADJACENCY,
+    createInitialState,
+    congestionLevel,
+    getEffectiveCapacity,
+    reduce,
+  };
+})();
+</script>
+
+<!-- ============================================================ -->
+<!-- UI SHELL — thin layer over the pure logic module             -->
+<!-- ============================================================ -->
+<script>
+(function() {
+  "use strict";
+
+  let state = TrafficEngine.createInitialState();
+  let prevState = null;
+  const log = [];
+
+  // --- Scenarios ---
+  const scenarios = [
+    {
+      id: "happy",
+      title: "Normal Flow",
+      description: "Watch the grid under normal traffic conditions. Advance time several cycles and observe how vehicles naturally flow in and out. All intersections stay in Free Flow or Moderate.",
+      steps: [
+        { label: "Advance time", action: { type: "TIME_TICK" } },
+        { label: "Advance time again", action: { type: "TIME_TICK" } },
+        { label: "Advance time once more", action: { type: "TIME_TICK" } },
+        { label: "Add 30 vehicles at Fuente", action: { type: "ADD_VEHICLES", intersectionId: "fuente-osmena", count: 30 } },
+        { label: "Advance time — watch Fuente absorb", action: { type: "TIME_TICK" } },
+      ],
+    },
+    {
+      id: "closure",
+      title: "Sudden Closure",
+      description: "Colon × Osmeña is closed for a festival. All vehicles currently there are redistributed to Fuente and Mango. Watch neighbors spike — does it cascade into gridlock?",
+      steps: [
+        { label: "Add 80 vehicles to Colon × Osmeña", action: { type: "ADD_VEHICLES", intersectionId: "colon-osmena", count: 80 } },
+        { label: "Close Colon × Osmeña (festival)", action: { type: "CLOSE_INTERSECTION", intersectionId: "colon-osmena" } },
+        { label: "Advance time — watch neighbors", action: { type: "TIME_TICK" } },
+        { label: "Advance time — does it cascade?", action: { type: "TIME_TICK" } },
+        { label: "Reopen Colon × Osmeña", action: { type: "OPEN_INTERSECTION", intersectionId: "colon-osmena" } },
+        { label: "Advance time — recovery", action: { type: "TIME_TICK" } },
+      ],
+    },
+    {
+      id: "accident",
+      title: "Accident Bottleneck",
+      description: "An accident at Fuente Osmeña Circle cuts capacity to 40%. Vehicles overflow to Capitol and Mango. Then a second accident at Mango creates cascading gridlock.",
+      steps: [
+        { label: "Add 100 vehicles to Fuente", action: { type: "ADD_VEHICLES", intersectionId: "fuente-osmena", count: 100 } },
+        { label: "Report accident at Fuente", action: { type: "REPORT_ACCIDENT", intersectionId: "fuente-osmena" } },
+        { label: "Advance time — overflow in progress", action: { type: "TIME_TICK" } },
+        { label: "Report accident at Mango (cascade!)", action: { type: "REPORT_ACCIDENT", intersectionId: "mango-jones" } },
+        { label: "Advance time — double bottleneck", action: { type: "TIME_TICK" } },
+        { label: "Clear accident at Fuente", action: { type: "OPEN_INTERSECTION", intersectionId: "fuente-osmena" } },
+        { label: "Clear accident at Mango", action: { type: "OPEN_INTERSECTION", intersectionId: "mango-jones" } },
+        { label: "Advance time — recovery", action: { type: "TIME_TICK" } },
+      ],
+    },
+    {
+      id: "deadlock",
+      title: "Deadlock: All Neighbors Closed",
+      description: "What happens when an intersection's only escape routes are all closed? Vehicles should be stuck — the model must handle this without crashing or losing vehicles.",
+      steps: [
+        { label: "Add 60 vehicles to SRP × Mambaling", action: { type: "ADD_VEHICLES", intersectionId: "srp-mambaling", count: 60 } },
+        { label: "Close Colon × Osmeña (neighbor 1)", action: { type: "CLOSE_INTERSECTION", intersectionId: "colon-osmena" } },
+        { label: "Close Banilad × Talamban (neighbor 2)", action: { type: "CLOSE_INTERSECTION", intersectionId: "banilad-talamban" } },
+        { label: "Close SRP — nowhere to go!", action: { type: "CLOSE_INTERSECTION", intersectionId: "srp-mambaling" } },
+        { label: "Advance time — stuck state", action: { type: "TIME_TICK" } },
+        { label: "Reopen Banilad", action: { type: "OPEN_INTERSECTION", intersectionId: "banilad-talamban" } },
+        { label: "Reopen SRP", action: { type: "OPEN_INTERSECTION", intersectionId: "srp-mambaling" } },
+        { label: "Reopen Colon", action: { type: "OPEN_INTERSECTION", intersectionId: "colon-osmena" } },
+      ],
+    },
+  ];
+
+  let activeScenario = null;
+  let scenarioStep = 0;
+
+  // --- Map node positions (approximate Cebu City geography) ---
+  const MAP_POSITIONS = {
+    "colon-osmena":     { x: 250, y: 320 },   // Downtown south
+    "fuente-osmena":    { x: 300, y: 200 },   // Central
+    "mango-jones":      { x: 420, y: 230 },   // Mid-east
+    "srp-mambaling":    { x: 130, y: 380 },   // South coastal
+    "banilad-talamban": { x: 500, y: 100 },   // North
+    "capitol-escario":  { x: 450, y: 330 },   // East-central
+  };
+
+  function congestionColor(inter) {
+    if (inter.status === "Closed") return "#94a3b8";
+    const level = TrafficEngine.congestionLevel(inter.vehicles, inter.capacity);
+    switch (level) {
+      case "Free Flow": return "#22c55e";
+      case "Moderate":  return "#eab308";
+      case "Heavy":     return "#f97316";
+      case "Gridlock":  return "#ef4444";
+      default: return "#94a3b8";
+    }
+  }
+
+  function roadColor(inter1, inter2) {
+    // Road color = worse of the two endpoints
+    const colors = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#94a3b8"];
+    const levels = ["Free Flow", "Moderate", "Heavy", "Gridlock"];
+    if (inter1.status === "Closed" || inter2.status === "Closed") return "#94a3b8";
+    const l1 = levels.indexOf(TrafficEngine.congestionLevel(inter1.vehicles, inter1.capacity));
+    const l2 = levels.indexOf(TrafficEngine.congestionLevel(inter2.vehicles, inter2.capacity));
+    return colors[Math.max(l1, l2)];
+  }
+
+  // --- Render ---
+  function render() {
+    renderMap();
+    renderGrid();
+    renderLog();
+  }
+
+  function renderMap() {
+    const roadsG = document.getElementById("map-roads");
+    const nodesG = document.getElementById("map-nodes");
+    roadsG.innerHTML = "";
+    nodesG.innerHTML = "";
+
+    // Draw roads (edges)
+    const drawnEdges = new Set();
+    Object.entries(TrafficEngine.ADJACENCY).forEach(([fromId, neighbors]) => {
+      neighbors.forEach(toId => {
+        const edgeKey = [fromId, toId].sort().join("--");
+        if (drawnEdges.has(edgeKey)) return;
+        drawnEdges.add(edgeKey);
+
+        const from = MAP_POSITIONS[fromId];
+        const to = MAP_POSITIONS[toId];
+        const inter1 = state.intersections[fromId];
+        const inter2 = state.intersections[toId];
+        const color = roadColor(inter1, inter2);
+        const opacity = (inter1.status === "Closed" || inter2.status === "Closed") ? "0.3" : "0.8";
+
+        roadsG.innerHTML += `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" 
+          stroke="${color}" stroke-width="4" stroke-linecap="round" opacity="${opacity}"/>`;
+      });
+    });
+
+    // Draw nodes
+    TrafficEngine.INTERSECTIONS.forEach(def => {
+      const inter = state.intersections[def.id];
+      const pos = MAP_POSITIONS[def.id];
+      const color = congestionColor(inter);
+      const radius = 18 + (inter.vehicles / inter.capacity) * 12; // size reflects load
+      const strokeColor = inter.status === "Accident" ? "#fbbf24" : inter.status === "Closed" ? "#64748b" : "#fff";
+      const strokeWidth = inter.status !== "Open" ? 4 : 2;
+
+      // Pulsing ring for accidents
+      const pulse = inter.status === "Accident" 
+        ? `<circle cx="${pos.x}" cy="${pos.y}" r="${radius + 6}" fill="none" stroke="#fbbf24" stroke-width="2" opacity="0.5">
+            <animate attributeName="r" from="${radius + 4}" to="${radius + 12}" dur="1s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" from="0.6" to="0" dur="1s" repeatCount="indefinite"/>
+           </circle>` 
+        : "";
+
+      nodesG.innerHTML += `
+        ${pulse}
+        <circle cx="${pos.x}" cy="${pos.y}" r="${radius}" fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}" 
+          style="cursor:pointer;" onclick="selectIntersection('${def.id}')"/>
+        <text x="${pos.x}" y="${pos.y - radius - 8}" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">
+          ${inter.name.split("×")[0].trim()}
+        </text>
+        <text x="${pos.x}" y="${pos.y + 4}" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">
+          ${inter.vehicles}
+        </text>
+      `;
+    });
+  }
+
+  window.selectIntersection = function(id) {
+    document.getElementById("sel-intersection").value = id;
+    document.getElementById("sel-status-intersection").value = id;
+  };
+
+  function renderGrid() {
+    const container = document.getElementById("grid-display");
+    container.innerHTML = "";
+
+    TrafficEngine.INTERSECTIONS.forEach(def => {
+      const inter = state.intersections[def.id];
+      const prevInter = prevState ? prevState.intersections[def.id] : null;
+      const changed = prevInter && (
+        prevInter.vehicles !== inter.vehicles ||
+        prevInter.status !== inter.status
+      );
+
+      const effCap = TrafficEngine.getEffectiveCapacity(inter);
+      const level = inter.status === "Closed" ? "—" : TrafficEngine.congestionLevel(inter.vehicles, inter.capacity);
+      const levelClass = level.toLowerCase().replace(" ", "-");
+
+      let statusBadge = "";
+      if (inter.status === "Closed") statusBadge = `<span class="status-badge status-closed">CLOSED</span>`;
+      if (inter.status === "Accident") statusBadge = `<span class="status-badge status-accident">ACCIDENT</span>`;
+
+      const card = document.createElement("div");
+      card.className = "intersection-card" + (changed ? " changed" : "");
+      card.innerHTML = `
+        <div class="name">${inter.name} ${statusBadge}</div>
+        <div class="stats">
+          <span>Vehicles: <strong>${inter.vehicles}</strong> / ${inter.capacity} capacity</span>
+          <span>Effective capacity: ${effCap}</span>
+          <span>Congestion: <span class="congestion-badge congestion-${levelClass}">${level}</span></span>
+          <span>Neighbors: ${(TrafficEngine.ADJACENCY[inter.id] || []).map(nId => state.intersections[nId].name.split("×")[0].trim()).join(", ")}</span>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  function renderLog() {
+    const container = document.getElementById("action-log");
+    container.innerHTML = log.slice(-15).reverse().map(entry =>
+      `<div class="log-entry"><span class="timestamp">[Tick ${entry.tick}]</span> ${entry.message}</div>`
+    ).join("");
+  }
+
+  function addLog(message) {
+    log.push({ tick: state.tick, message });
+  }
+
+  // --- Actions ---
+  window.doAction = function(type) {
+    prevState = JSON.parse(JSON.stringify(state));
+
+    let action = { type };
+
+    switch (type) {
+      case "ADD_VEHICLES":
+      case "REMOVE_VEHICLES":
+        action.intersectionId = document.getElementById("sel-intersection").value;
+        action.count = parseInt(document.getElementById("vehicle-count").value) || 20;
+        break;
+      case "CLOSE_INTERSECTION":
+      case "REPORT_ACCIDENT":
+      case "OPEN_INTERSECTION":
+        action.intersectionId = document.getElementById("sel-status-intersection").value;
+        break;
+    }
+
+    state = TrafficEngine.reduce(state, action);
+    addLog(describeAction(action));
+    render();
+  };
+
+  function describeAction(action) {
+    const name = action.intersectionId ? state.intersections[action.intersectionId]?.name || action.intersectionId : "";
+    switch (action.type) {
+      case "ADD_VEHICLES": return `Added ${action.count} vehicles to ${name}`;
+      case "REMOVE_VEHICLES": return `Removed ${action.count} vehicles from ${name}`;
+      case "CLOSE_INTERSECTION": return `🚧 Closed ${name} — vehicles redistributed to neighbors`;
+      case "REPORT_ACCIDENT": return `🚨 Accident reported at ${name} — capacity reduced to 40%`;
+      case "OPEN_INTERSECTION": return `✅ Reopened / cleared ${name}`;
+      case "TIME_TICK": return `⏱️ Time advanced — natural flow cycle`;
+      case "RESET": return `🔄 State reset to initial conditions`;
+      default: return action.type;
+    }
+  }
+
+  // --- Scenarios ---
+  function renderScenarios() {
+    const tabsEl = document.getElementById("scenario-tabs");
+    const panelsEl = document.getElementById("scenario-panels");
+
+    scenarios.forEach((sc, i) => {
+      const tab = document.createElement("button");
+      tab.className = "tab" + (i === 0 ? " active" : "");
+      tab.textContent = sc.title;
+      tab.onclick = () => activateScenario(i);
+      tabsEl.appendChild(tab);
+
+      const panel = document.createElement("div");
+      panel.className = "tab-content" + (i === 0 ? " active" : "");
+      panel.id = `scenario-${sc.id}`;
+      panel.innerHTML = `
+        <p class="scenario-desc">${sc.description}</p>
+        <ol class="scenario-steps" id="steps-${sc.id}">
+          ${sc.steps.map((step, si) => `
+            <li id="step-${sc.id}-${si}">
+              <span class="step-num">${si + 1}</span>
+              <button class="btn-primary" onclick="runScenarioStep('${sc.id}', ${si})">${step.label}</button>
+            </li>
+          `).join("")}
+        </ol>
+      `;
+      panelsEl.appendChild(panel);
+    });
+  }
+
+  function activateScenario(index) {
+    document.querySelectorAll(".tab").forEach((t, i) => t.classList.toggle("active", i === index));
+    document.querySelectorAll(".tab-content").forEach((p, i) => p.classList.toggle("active", i === index));
+
+    // Reset state for the scenario
+    state = TrafficEngine.createInitialState();
+    prevState = null;
+    activeScenario = scenarios[index];
+    scenarioStep = 0;
+    addLog(`📋 Started walkthrough: "${activeScenario.title}" — state reset`);
+    render();
+
+    // Reset step styling
+    scenarios.forEach(sc => {
+      sc.steps.forEach((_, si) => {
+        const el = document.getElementById(`step-${sc.id}-${si}`);
+        if (el) el.classList.remove("done");
+      });
+    });
+  }
+
+  window.runScenarioStep = function(scenarioId, stepIndex) {
+    const sc = scenarios.find(s => s.id === scenarioId);
+    if (!sc) return;
+
+    const step = sc.steps[stepIndex];
+    prevState = JSON.parse(JSON.stringify(state));
+    state = TrafficEngine.reduce(state, step.action);
+    addLog(describeAction(step.action));
+
+    const el = document.getElementById(`step-${scenarioId}-${stepIndex}`);
+    if (el) el.classList.add("done");
+
+    render();
+  };
+
+  // --- Init ---
+  function init() {
+    // Populate dropdowns
+    const selInter = document.getElementById("sel-intersection");
+    const selStatus = document.getElementById("sel-status-intersection");
+    TrafficEngine.INTERSECTIONS.forEach(def => {
+      selInter.innerHTML += `<option value="${def.id}">${def.name}</option>`;
+      selStatus.innerHTML += `<option value="${def.id}">${def.name}</option>`;
+    });
+
+    renderScenarios();
+    render();
+  }
+
+  init();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LGU Traffic Dashboard — UI Exploration Prototype</title>
+<!-- Three radically different layout variants of a Cebu City Traffic & Congestion Dashboard, switchable via floating bar. -->
+<!-- Question: What should the LGU Traffic & Congestion command-center dashboard look like? Glassmorphism aesthetic, 3 variants. -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      backdropBlur: { xs: '2px' },
+      colors: {
+        glass: {
+          white: 'rgba(255,255,255,0.12)',
+          dark: 'rgba(15,23,42,0.6)',
+          accent: 'rgba(56,189,248,0.15)',
+        }
+      }
+    }
+  }
+}
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
+
+  /* Gradient backgrounds */
+  .bg-gradient-city {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 30%, #312e81 60%, #0f172a 100%);
+  }
+  .bg-gradient-sunset {
+    background: linear-gradient(160deg, #1a1a2e 0%, #16213e 25%, #0f3460 50%, #533483 75%, #e94560 100%);
+  }
+  .bg-gradient-ocean {
+    background: linear-gradient(180deg, #0c1220 0%, #0a192f 30%, #112240 60%, #1d3557 100%);
+  }
+
+  /* Glassmorphism panels */
+  .glass {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+  }
+  .glass-strong {
+    background: rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 16px;
+  }
+  .glass-dark {
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+  }
+
+  /* Floating switcher */
+  .switcher {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50px;
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .switcher button {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  }
+  .switcher button:hover { background: rgba(255,255,255,0.25); }
+  .switcher .label { color: #e2e8f0; font-size: 13px; font-weight: 500; min-width: 180px; text-align: center; }
+
+  /* Map simulation */
+  .map-node {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+  .map-node:hover { transform: scale(1.2); z-index: 10; }
+  .map-node.pulse { animation: pulse 2s infinite; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    50% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+  }
+
+  /* Alert feed items */
+  .alert-item {
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+  .alert-item:hover {
+    background: rgba(255,255,255,0.08);
+    transform: translateX(4px);
+  }
+
+  /* Draggable cards */
+  .widget-card {
+    cursor: grab;
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .widget-card:active { cursor: grabbing; transform: scale(1.02); }
+  .widget-card:hover { box-shadow: 0 8px 32px rgba(56, 189, 248, 0.2); }
+
+  /* Hide inactive variants */
+  .variant { display: none; min-height: 100vh; }
+  .variant.active { display: block; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- VARIANT A — "Command Center" Full-Width Map with Overlay Panels -->
+<!-- ============================================================ -->
+<div id="variant-a" class="variant bg-gradient-city">
+  <!-- Full-screen map background -->
+  <div class="relative w-full h-screen overflow-hidden">
+    <!-- Simulated Map Area -->
+    <div class="absolute inset-0 p-6">
+      <!-- Map grid overlay -->
+      <div class="absolute inset-0 opacity-10">
+        <svg width="100%" height="100%">
+          <defs>
+            <pattern id="grid-a" width="60" height="60" patternUnits="userSpaceOnUse">
+              <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid-a)"/>
+        </svg>
+      </div>
+
+      <!-- Map nodes (congestion heatmap) -->
+      <div id="map-nodes-a" class="absolute inset-0"></div>
+
+      <!-- Road network lines SVG -->
+      <svg id="roads-svg-a" class="absolute inset-0 w-full h-full pointer-events-none" style="z-index:1;"></svg>
+    </div>
+
+    <!-- Top Bar -->
+    <div class="absolute top-4 left-4 right-4 z-20">
+      <div class="glass px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
+          <h1 class="text-white font-bold text-lg">Cebu City Traffic Command Center</h1>
+        </div>
+        <div class="flex items-center gap-4 text-slate-300 text-sm">
+          <span>🕐 <span id="time-a">15:22:36</span></span>
+          <span class="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold">LIVE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Left: Alert Feed Overlay -->
+    <div class="absolute top-24 left-4 bottom-20 w-80 z-20">
+      <div class="glass-strong h-full p-4 flex flex-col">
+        <h2 class="text-white font-semibold text-sm mb-3 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
+          Live Alerts & Incidents
+        </h2>
+        <div class="flex-1 overflow-y-auto space-y-2" id="alerts-a"></div>
+      </div>
+    </div>
+
+    <!-- Right: Action Widgets -->
+    <div class="absolute top-24 right-4 bottom-20 w-72 z-20 space-y-3" id="widgets-a">
+      <!-- Congestion Summary -->
+      <div class="glass-strong p-4 widget-card">
+        <h3 class="text-white font-semibold text-sm mb-3">Congestion Summary</h3>
+        <div class="space-y-2" id="congestion-bars-a"></div>
+      </div>
+      <!-- Reroute Widget -->
+      <div class="glass-strong p-4 widget-card">
+        <h3 class="text-white font-semibold text-sm mb-3">Quick Reroute</h3>
+        <div class="space-y-2">
+          <select class="w-full bg-white/10 text-white text-xs border border-white/20 rounded-lg px-3 py-2" id="reroute-from-a">
+            <option value="">From intersection...</option>
+          </select>
+          <select class="w-full bg-white/10 text-white text-xs border border-white/20 rounded-lg px-3 py-2" id="reroute-to-a">
+            <option value="">To intersection...</option>
+          </select>
+          <button onclick="simulateReroute('a')" class="w-full py-2 bg-blue-500/30 hover:bg-blue-500/50 text-blue-200 text-xs font-semibold rounded-lg border border-blue-400/30 transition">
+            ⚡ Simulate Reroute
+          </button>
+        </div>
+      </div>
+      <!-- Prediction Widget -->
+      <div class="glass-strong p-4 widget-card">
+        <h3 class="text-white font-semibold text-sm mb-3">Bottleneck Prediction</h3>
+        <div class="text-xs text-slate-300 space-y-1" id="predictions-a"></div>
+      </div>
+    </div>
+
+    <!-- Bottom Stats Bar -->
+    <div class="absolute bottom-16 left-4 right-4 z-20">
+      <div class="glass px-6 py-3 flex items-center justify-between">
+        <div class="text-center">
+          <div class="text-2xl font-bold text-white" id="total-vehicles-a">—</div>
+          <div class="text-xs text-slate-400">Total Vehicles</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-amber-400" id="avg-congestion-a">—</div>
+          <div class="text-xs text-slate-400">Avg Congestion</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-red-400" id="active-incidents-a">—</div>
+          <div class="text-xs text-slate-400">Active Incidents</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-green-400" id="flow-rate-a">—</div>
+          <div class="text-xs text-slate-400">Flow Rate</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- VARIANT B — "Split-Screen" Left Map / Right Dashboard Columns -->
+<!-- ============================================================ -->
+<div id="variant-b" class="variant bg-gradient-sunset">
+  <div class="flex h-screen">
+    <!-- Left: Map Panel (60%) -->
+    <div class="w-3/5 relative p-4">
+      <div class="glass-strong h-full relative overflow-hidden">
+        <!-- Map header -->
+        <div class="absolute top-4 left-4 right-4 z-10">
+          <div class="flex items-center justify-between">
+            <h1 class="text-white font-bold text-lg flex items-center gap-2">
+              <svg class="w-5 h-5 text-cyan-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"/></svg>
+              Traffic Heatmap
+            </h1>
+            <div class="flex gap-2">
+              <span class="px-2 py-1 rounded-md bg-green-500/20 text-green-300 text-[10px] font-bold">FREE</span>
+              <span class="px-2 py-1 rounded-md bg-yellow-500/20 text-yellow-300 text-[10px] font-bold">MOD</span>
+              <span class="px-2 py-1 rounded-md bg-orange-500/20 text-orange-300 text-[10px] font-bold">HEAVY</span>
+              <span class="px-2 py-1 rounded-md bg-red-500/20 text-red-300 text-[10px] font-bold">GRID</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grid overlay -->
+        <div class="absolute inset-0 opacity-5">
+          <svg width="100%" height="100%">
+            <defs>
+              <pattern id="grid-b" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#fff" stroke-width="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid-b)"/>
+          </svg>
+        </div>
+
+        <!-- Map nodes -->
+        <div id="map-nodes-b" class="absolute inset-0"></div>
+        <svg id="roads-svg-b" class="absolute inset-0 w-full h-full pointer-events-none"></svg>
+      </div>
+    </div>
+
+    <!-- Right: Dashboard Columns (40%) -->
+    <div class="w-2/5 p-4 flex flex-col gap-3 overflow-y-auto">
+      <!-- Header -->
+      <div class="glass px-4 py-3 flex items-center justify-between shrink-0">
+        <div>
+          <h2 class="text-white font-bold text-sm">Cebu LGU Dashboard</h2>
+          <p class="text-slate-400 text-[10px]">Real-time Traffic Intelligence</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+          <span class="text-green-300 text-xs">Online</span>
+        </div>
+      </div>
+
+      <!-- Stats Row -->
+      <div class="grid grid-cols-2 gap-3 shrink-0">
+        <div class="glass p-3 text-center">
+          <div class="text-xl font-bold text-white" id="total-vehicles-b">—</div>
+          <div class="text-[10px] text-slate-400">Vehicles Tracked</div>
+        </div>
+        <div class="glass p-3 text-center">
+          <div class="text-xl font-bold text-red-400" id="active-incidents-b">—</div>
+          <div class="text-[10px] text-slate-400">Active Incidents</div>
+        </div>
+      </div>
+
+      <!-- Alert Feed -->
+      <div class="glass flex-1 min-h-0 p-4 flex flex-col">
+        <h3 class="text-white font-semibold text-xs mb-2 flex items-center gap-2">
+          🚨 Live Alerts
+        </h3>
+        <div class="flex-1 overflow-y-auto space-y-2" id="alerts-b"></div>
+      </div>
+
+      <!-- Action Cards -->
+      <div class="glass p-4 shrink-0">
+        <h3 class="text-white font-semibold text-xs mb-3">⚡ Traffic Actions</h3>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="simulateReroute('b')" class="p-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/30 text-cyan-200 text-[10px] font-semibold transition">
+            Reroute Traffic
+          </button>
+          <button onclick="simulatePredict('b')" class="p-2 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/30 text-purple-200 text-[10px] font-semibold transition">
+            Predict Bottleneck
+          </button>
+          <button onclick="simulateClose('b')" class="p-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-400/30 text-red-200 text-[10px] font-semibold transition">
+            Close Road
+          </button>
+          <button onclick="simulateClear('b')" class="p-2 rounded-lg bg-green-500/20 hover:bg-green-500/30 border border-green-400/30 text-green-200 text-[10px] font-semibold transition">
+            Clear Incident
+          </button>
+        </div>
+      </div>
+
+      <!-- Congestion Breakdown -->
+      <div class="glass p-4 shrink-0">
+        <h3 class="text-white font-semibold text-xs mb-3">📊 Congestion Breakdown</h3>
+        <div class="space-y-2" id="congestion-bars-b"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- VARIANT C — "Orbital" Radial Map Center with Surrounding Cards -->
+<!-- ============================================================ -->
+<div id="variant-c" class="variant bg-gradient-ocean">
+  <div class="relative w-full h-screen overflow-hidden">
+    <!-- Central radial map -->
+    <div class="absolute inset-0 flex items-center justify-center">
+      <div class="relative" style="width: 500px; height: 500px;">
+        <!-- Orbital rings -->
+        <div class="absolute inset-0 flex items-center justify-center">
+          <div class="w-[480px] h-[480px] rounded-full border border-white/5"></div>
+        </div>
+        <div class="absolute inset-0 flex items-center justify-center">
+          <div class="w-[360px] h-[360px] rounded-full border border-white/5"></div>
+        </div>
+        <div class="absolute inset-0 flex items-center justify-center">
+          <div class="w-[240px] h-[240px] rounded-full border border-white/5"></div>
+        </div>
+        <!-- Center hub -->
+        <div class="absolute inset-0 flex items-center justify-center">
+          <div class="glass-strong w-32 h-32 rounded-full flex flex-col items-center justify-center">
+            <div class="text-xl font-bold text-white" id="total-vehicles-c">—</div>
+            <div class="text-[9px] text-slate-400">Total Flow</div>
+          </div>
+        </div>
+        <!-- Orbital nodes -->
+        <div id="map-nodes-c" class="absolute inset-0"></div>
+        <svg id="roads-svg-c" class="absolute inset-0 w-full h-full pointer-events-none"></svg>
+      </div>
+    </div>
+
+    <!-- Top Header Bar -->
+    <div class="absolute top-4 left-4 right-4 z-20">
+      <div class="glass px-6 py-3 flex items-center justify-between">
+        <h1 class="text-white font-bold flex items-center gap-2">
+          <span class="text-2xl">🛰️</span>
+          <span>Traffic Orbital View</span>
+          <span class="ml-2 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-bold">CEBU CITY</span>
+        </h1>
+        <div class="text-slate-300 text-sm">⏱ <span id="time-c">15:22:36</span></div>
+      </div>
+    </div>
+
+    <!-- Top-left: Mini Alerts -->
+    <div class="absolute top-20 left-4 w-72 z-20">
+      <div class="glass p-3">
+        <h3 class="text-white font-semibold text-[11px] mb-2">🔴 Critical Alerts</h3>
+        <div class="space-y-1.5 max-h-40 overflow-y-auto" id="alerts-c"></div>
+      </div>
+    </div>
+
+    <!-- Top-right: Predictions -->
+    <div class="absolute top-20 right-4 w-64 z-20">
+      <div class="glass p-3">
+        <h3 class="text-white font-semibold text-[11px] mb-2">🔮 Predictions (Next 30min)</h3>
+        <div class="space-y-1.5" id="predictions-c"></div>
+      </div>
+    </div>
+
+    <!-- Bottom-left: Congestion gauge -->
+    <div class="absolute bottom-20 left-4 w-72 z-20">
+      <div class="glass p-4">
+        <h3 class="text-white font-semibold text-[11px] mb-3">Network Health</h3>
+        <div class="space-y-2" id="congestion-bars-c"></div>
+      </div>
+    </div>
+
+    <!-- Bottom-right: Quick Actions -->
+    <div class="absolute bottom-20 right-4 w-64 z-20">
+      <div class="glass p-4">
+        <h3 class="text-white font-semibold text-[11px] mb-3">Quick Actions</h3>
+        <div class="space-y-2">
+          <button onclick="simulateReroute('c')" class="w-full py-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-400/20 text-cyan-200 text-[11px] font-semibold transition">
+            ⚡ Auto-Reroute Congested
+          </button>
+          <button onclick="simulatePredict('c')" class="w-full py-2 rounded-lg bg-violet-500/20 hover:bg-violet-500/40 border border-violet-400/20 text-violet-200 text-[11px] font-semibold transition">
+            🔮 Run Prediction Model
+          </button>
+          <button onclick="simulateClear('c')" class="w-full py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-400/20 text-emerald-200 text-[11px] font-semibold transition">
+            ✅ Clear All Incidents
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Stats -->
+    <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
+      <div class="glass px-8 py-2 flex items-center gap-8">
+        <div class="text-center">
+          <div class="text-lg font-bold text-amber-400" id="avg-congestion-c">—</div>
+          <div class="text-[9px] text-slate-400">Avg Load</div>
+        </div>
+        <div class="text-center">
+          <div class="text-lg font-bold text-red-400" id="active-incidents-c">—</div>
+          <div class="text-[9px] text-slate-400">Incidents</div>
+        </div>
+        <div class="text-center">
+          <div class="text-lg font-bold text-green-400" id="flow-rate-c">—</div>
+          <div class="text-[9px] text-slate-400">Flow Rate</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- FLOATING VARIANT SWITCHER                                     -->
+<!-- ============================================================ -->
+<div class="switcher" id="switcher">
+  <button onclick="cycleVariant(-1)">←</button>
+  <div class="label" id="switcher-label">A — Command Center</div>
+  <button onclick="cycleVariant(1)">→</button>
+</div>
+
+<!-- ============================================================ -->
+<!-- DATA + LOGIC (all in-memory, no external dependencies)        -->
+<!-- ============================================================ -->
+<script>
+(function() {
+  "use strict";
+
+  // --- Dummy Data ---
+  const intersections = [
+    { id: "colon-osmena",     name: "Colon × Osmeña",       vehicles: 95,  capacity: 120, status: "Open" },
+    { id: "fuente-osmena",    name: "Fuente Osmeña Circle",  vehicles: 130, capacity: 150, status: "Accident" },
+    { id: "mango-jones",      name: "Mango × Gen. Maxilom", vehicles: 72,  capacity: 100, status: "Open" },
+    { id: "srp-mambaling",    name: "SRP × Mambaling",      vehicles: 160, capacity: 180, status: "Open" },
+    { id: "banilad-talamban", name: "Banilad × Talamban",   vehicles: 45,  capacity: 130, status: "Open" },
+    { id: "capitol-escario",  name: "Capitol × Escario",    vehicles: 105, capacity: 110, status: "Closed" },
+  ];
+
+  const adjacency = {
+    "colon-osmena":     ["fuente-osmena", "mango-jones"],
+    "fuente-osmena":    ["colon-osmena", "capitol-escario", "mango-jones"],
+    "mango-jones":      ["fuente-osmena", "colon-osmena", "capitol-escario"],
+    "srp-mambaling":    ["colon-osmena", "banilad-talamban"],
+    "banilad-talamban": ["srp-mambaling", "capitol-escario"],
+    "capitol-escario":  ["fuente-osmena", "mango-jones", "banilad-talamban"],
+  };
+
+  const alerts = [
+    { time: "15:21", severity: "critical", text: "Accident at Fuente Osmeña Circle — capacity reduced 60%" },
+    { time: "15:19", severity: "critical", text: "Capitol × Escario CLOSED — road maintenance until 18:00" },
+    { time: "15:17", severity: "warning",  text: "Heavy congestion building at SRP × Mambaling" },
+    { time: "15:14", severity: "warning",  text: "Unusual volume on Colon × Osmeña — possible event nearby" },
+    { time: "15:10", severity: "info",     text: "Banilad × Talamban cleared — traffic normalized" },
+    { time: "15:05", severity: "info",     text: "Scheduled closure: Capitol × Escario starting 15:00" },
+    { time: "14:58", severity: "warning",  text: "Prediction: SRP will hit Gridlock by 15:45 if trend continues" },
+  ];
+
+  const predictions = [
+    { intersection: "SRP × Mambaling", prediction: "Gridlock in ~23 min", confidence: 87 },
+    { intersection: "Fuente Osmeña",   prediction: "Heavy until accident cleared", confidence: 92 },
+    { intersection: "Mango × Maxilom", prediction: "Moderate → Heavy in 15 min", confidence: 74 },
+  ];
+
+  // --- Helpers ---
+  function congestionLevel(vehicles, capacity) {
+    const r = vehicles / capacity;
+    if (r < 0.4) return { level: "Free Flow", color: "#22c55e", class: "green" };
+    if (r < 0.7) return { level: "Moderate", color: "#eab308", class: "yellow" };
+    if (r < 0.95) return { level: "Heavy", color: "#f97316", class: "orange" };
+    return { level: "Gridlock", color: "#ef4444", class: "red" };
+  }
+
+  function severityColor(s) {
+    if (s === "critical") return "bg-red-500/20 text-red-300 border-red-500/30";
+    if (s === "warning") return "bg-amber-500/20 text-amber-300 border-amber-500/30";
+    return "bg-blue-500/20 text-blue-300 border-blue-500/30";
+  }
+
+  function severityDot(s) {
+    if (s === "critical") return "bg-red-400";
+    if (s === "warning") return "bg-amber-400";
+    return "bg-blue-400";
+  }
+
+  // --- Map positions (percent-based for each variant) ---
+  // Variant A & B: absolute pixel positions relative to container
+  const mapPosAB = {
+    "colon-osmena":     { x: 35, y: 65 },
+    "fuente-osmena":    { x: 42, y: 40 },
+    "mango-jones":      { x: 58, y: 45 },
+    "srp-mambaling":    { x: 22, y: 78 },
+    "banilad-talamban": { x: 70, y: 25 },
+    "capitol-escario":  { x: 65, y: 65 },
+  };
+
+  // Variant C: radial positions around center (angle in degrees, distance from center)
+  const mapPosC = {
+    "colon-osmena":     { angle: 210, dist: 180 },
+    "fuente-osmena":    { angle: 270, dist: 150 },
+    "mango-jones":      { angle: 330, dist: 170 },
+    "srp-mambaling":    { angle: 150, dist: 200 },
+    "banilad-talamban": { angle: 30,  dist: 190 },
+    "capitol-escario":  { angle: 90,  dist: 160 },
+  };
+
+  // --- Render functions ---
+  function renderMapNodes(containerId, positions, isRadial) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = "";
+
+    intersections.forEach(inter => {
+      const cong = congestionLevel(inter.vehicles, inter.capacity);
+      const node = document.createElement("div");
+      node.className = "map-node" + (inter.status === "Accident" ? " pulse" : "");
+
+      const size = 36 + (inter.vehicles / inter.capacity) * 24;
+      node.style.width = size + "px";
+      node.style.height = size + "px";
+      node.style.backgroundColor = inter.status === "Closed" ? "#64748b" : cong.color;
+      node.style.zIndex = "5";
+
+      if (isRadial) {
+        const pos = mapPosC[inter.id];
+        const rad = (pos.angle * Math.PI) / 180;
+        const cx = 250 + Math.cos(rad) * pos.dist - size / 2;
+        const cy = 250 + Math.sin(rad) * pos.dist - size / 2;
+        node.style.left = cx + "px";
+        node.style.top = cy + "px";
+      } else {
+        const pos = mapPosAB[inter.id];
+        node.style.left = pos.x + "%";
+        node.style.top = pos.y + "%";
+        node.style.transform = "translate(-50%, -50%)";
+      }
+
+      node.innerHTML = `<span style="font-size:9px;">${inter.vehicles}</span>`;
+      node.title = `${inter.name}\n${inter.vehicles}/${inter.capacity} vehicles\nStatus: ${inter.status}\nCongestion: ${cong.level}`;
+
+      // Label
+      const label = document.createElement("div");
+      label.className = "absolute text-[9px] text-white/70 font-medium whitespace-nowrap pointer-events-none";
+      label.style.left = "50%";
+      label.style.top = "-18px";
+      label.style.transform = "translateX(-50%)";
+      label.textContent = inter.name.split("×")[0].trim();
+      node.style.position = "absolute";
+      node.appendChild(label);
+
+      container.appendChild(node);
+    });
+  }
+
+  function renderRoads(svgId, positions, isRadial) {
+    const svg = document.getElementById(svgId);
+    svg.innerHTML = "";
+    const drawn = new Set();
+
+    Object.entries(adjacency).forEach(([fromId, neighbors]) => {
+      neighbors.forEach(toId => {
+        const key = [fromId, toId].sort().join("--");
+        if (drawn.has(key)) return;
+        drawn.add(key);
+
+        const from = intersections.find(i => i.id === fromId);
+        const to = intersections.find(i => i.id === toId);
+        const cong1 = congestionLevel(from.vehicles, from.capacity);
+        const cong2 = congestionLevel(to.vehicles, to.capacity);
+        const color = (from.status === "Closed" || to.status === "Closed") ? "#475569" : 
+          (["#ef4444","#f97316","#eab308","#22c55e"].indexOf(cong1.color) < ["#ef4444","#f97316","#eab308","#22c55e"].indexOf(cong2.color)) ? cong1.color : cong2.color;
+        const opacity = (from.status === "Closed" || to.status === "Closed") ? 0.2 : 0.5;
+
+        let x1, y1, x2, y2;
+        if (isRadial) {
+          const p1 = mapPosC[fromId];
+          const p2 = mapPosC[toId];
+          x1 = 250 + Math.cos(p1.angle * Math.PI / 180) * p1.dist;
+          y1 = 250 + Math.sin(p1.angle * Math.PI / 180) * p1.dist;
+          x2 = 250 + Math.cos(p2.angle * Math.PI / 180) * p2.dist;
+          y2 = 250 + Math.sin(p2.angle * Math.PI / 180) * p2.dist;
+        } else {
+          const p1 = mapPosAB[fromId];
+          const p2 = mapPosAB[toId];
+          x1 = p1.x + "%"; y1 = p1.y + "%";
+          x2 = p2.x + "%"; y2 = p2.y + "%";
+        }
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", x1);
+        line.setAttribute("y1", y1);
+        line.setAttribute("x2", x2);
+        line.setAttribute("y2", y2);
+        line.setAttribute("stroke", color);
+        line.setAttribute("stroke-width", "3");
+        line.setAttribute("stroke-linecap", "round");
+        line.setAttribute("opacity", opacity);
+        svg.appendChild(line);
+      });
+    });
+  }
+
+  function renderAlerts(containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = alerts.map(a => `
+      <div class="alert-item p-2 rounded-lg border ${severityColor(a.severity)}">
+        <div class="flex items-start gap-2">
+          <div class="w-1.5 h-1.5 rounded-full ${severityDot(a.severity)} mt-1.5 shrink-0"></div>
+          <div>
+            <div class="text-[10px] font-medium">${a.text}</div>
+            <div class="text-[9px] opacity-60 mt-0.5">${a.time}</div>
+          </div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function renderCongestionBars(containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = intersections.map(inter => {
+      const cong = congestionLevel(inter.vehicles, inter.capacity);
+      const pct = Math.min(100, Math.round((inter.vehicles / inter.capacity) * 100));
+      return `
+        <div>
+          <div class="flex justify-between text-[10px] text-slate-300 mb-1">
+            <span>${inter.name.split("×")[0].trim()}</span>
+            <span style="color:${cong.color}">${pct}%</span>
+          </div>
+          <div class="h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div class="h-full rounded-full transition-all" style="width:${pct}%; background:${cong.color};"></div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderPredictions(containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = predictions.map(p => `
+      <div class="flex items-center justify-between p-1.5 rounded-md bg-white/5">
+        <div>
+          <div class="text-[10px] text-white font-medium">${p.intersection}</div>
+          <div class="text-[9px] text-slate-400">${p.prediction}</div>
+        </div>
+        <div class="text-[10px] font-bold text-amber-400">${p.confidence}%</div>
+      </div>
+    `).join("");
+  }
+
+  function renderStats(suffix) {
+    const totalVehicles = intersections.reduce((sum, i) => sum + i.vehicles, 0);
+    const avgCongestion = Math.round(intersections.reduce((sum, i) => sum + (i.vehicles / i.capacity) * 100, 0) / intersections.length);
+    const incidents = intersections.filter(i => i.status !== "Open").length;
+    const flowRate = Math.round((1 - avgCongestion / 100) * 100);
+
+    const tv = document.getElementById("total-vehicles-" + suffix);
+    const ac = document.getElementById("avg-congestion-" + suffix);
+    const ai = document.getElementById("active-incidents-" + suffix);
+    const fr = document.getElementById("flow-rate-" + suffix);
+
+    if (tv) tv.textContent = totalVehicles.toLocaleString();
+    if (ac) ac.textContent = avgCongestion + "%";
+    if (ai) ai.textContent = incidents;
+    if (fr) fr.textContent = flowRate + "%";
+  }
+
+  function populateReroute(suffix) {
+    const fromEl = document.getElementById("reroute-from-" + suffix);
+    const toEl = document.getElementById("reroute-to-" + suffix);
+    if (!fromEl || !toEl) return;
+    intersections.forEach(i => {
+      fromEl.innerHTML += `<option value="${i.id}">${i.name}</option>`;
+      toEl.innerHTML += `<option value="${i.id}">${i.name}</option>`;
+    });
+  }
+
+  // --- Global action handlers ---
+  window.simulateReroute = function(variant) {
+    const randomFrom = intersections[Math.floor(Math.random() * intersections.length)];
+    const neighbors = adjacency[randomFrom.id];
+    const randomTo = intersections.find(i => i.id === neighbors[0]);
+    const moved = Math.min(randomFrom.vehicles, 20);
+    randomFrom.vehicles -= moved;
+    if (randomTo) randomTo.vehicles += moved;
+    alerts.unshift({ time: new Date().toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit'}), severity: "info", text: `Rerouted ${moved} vehicles from ${randomFrom.name} → ${randomTo?.name}` });
+    renderAll();
+  };
+
+  window.simulatePredict = function(variant) {
+    alerts.unshift({ time: new Date().toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit'}), severity: "warning", text: `Prediction model updated — SRP likely to gridlock in 20 min` });
+    renderAll();
+  };
+
+  window.simulateClose = function(variant) {
+    const open = intersections.filter(i => i.status === "Open");
+    if (open.length > 2) {
+      const target = open[Math.floor(Math.random() * open.length)];
+      target.status = "Closed";
+      alerts.unshift({ time: new Date().toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit'}), severity: "critical", text: `${target.name} has been CLOSED` });
+    }
+    renderAll();
+  };
+
+  window.simulateClear = function(variant) {
+    intersections.forEach(i => { if (i.status !== "Open") i.status = "Open"; });
+    alerts.unshift({ time: new Date().toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit'}), severity: "info", text: `All incidents cleared — roads reopened` });
+    renderAll();
+  };
+
+  // --- Render all ---
+  function renderAll() {
+    // Variant A
+    renderMapNodes("map-nodes-a", mapPosAB, false);
+    renderRoads("roads-svg-a", mapPosAB, false);
+    renderAlerts("alerts-a");
+    renderCongestionBars("congestion-bars-a");
+    renderPredictions("predictions-a");
+    renderStats("a");
+
+    // Variant B
+    renderMapNodes("map-nodes-b", mapPosAB, false);
+    renderRoads("roads-svg-b", mapPosAB, false);
+    renderAlerts("alerts-b");
+    renderCongestionBars("congestion-bars-b");
+    renderStats("b");
+
+    // Variant C
+    renderMapNodes("map-nodes-c", mapPosC, true);
+    renderRoads("roads-svg-c", mapPosC, true);
+    renderAlerts("alerts-c");
+    renderCongestionBars("congestion-bars-c");
+    renderPredictions("predictions-c");
+    renderStats("c");
+  }
+
+  // --- Variant Switching ---
+  const variants = [
+    { key: "A", name: "Command Center", desc: "Full-width map with floating overlay panels" },
+    { key: "B", name: "Split-Screen",   desc: "Left map / right dashboard columns" },
+    { key: "C", name: "Orbital View",   desc: "Radial center map with surrounding cards" },
+  ];
+  let currentVariant = 0;
+
+  function getVariantFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const v = (params.get("variant") || "A").toUpperCase();
+    const idx = variants.findIndex(vr => vr.key === v);
+    return idx >= 0 ? idx : 0;
+  }
+
+  function setVariant(idx) {
+    currentVariant = idx;
+    const v = variants[idx];
+
+    // Update URL
+    const url = new URL(window.location);
+    url.searchParams.set("variant", v.key);
+    history.replaceState(null, "", url);
+
+    // Show/hide
+    document.querySelectorAll(".variant").forEach(el => el.classList.remove("active"));
+    document.getElementById("variant-" + v.key.toLowerCase()).classList.add("active");
+
+    // Update switcher label
+    document.getElementById("switcher-label").textContent = `${v.key} — ${v.name}`;
+
+    renderAll();
+  }
+
+  window.cycleVariant = function(dir) {
+    let next = (currentVariant + dir + variants.length) % variants.length;
+    setVariant(next);
+  };
+
+  // Keyboard nav
+  document.addEventListener("keydown", function(e) {
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName) || e.target.contentEditable === "true") return;
+    if (e.key === "ArrowLeft") cycleVariant(-1);
+    if (e.key === "ArrowRight") cycleVariant(1);
+  });
+
+  // --- Auto-update time ---
+  function updateTime() {
+    const now = new Date().toLocaleTimeString("en-US", { hour12: false });
+    const ta = document.getElementById("time-a");
+    const tc = document.getElementById("time-c");
+    if (ta) ta.textContent = now;
+    if (tc) tc.textContent = now;
+  }
+  setInterval(updateTime, 1000);
+
+  // --- Simulate live data changes ---
+  setInterval(function() {
+    intersections.forEach(inter => {
+      if (inter.status === "Closed") return;
+      const delta = Math.floor(Math.random() * 10) - 4;
+      inter.vehicles = Math.max(10, Math.min(inter.capacity * 1.3, inter.vehicles + delta));
+    });
+    renderAll();
+  }, 3000);
+
+  // --- Init ---
+  currentVariant = getVariantFromURL();
+  populateReroute("a");
+  setVariant(currentVariant);
+  updateTime();
+})();
+</script>
+
+</body>
+</html>

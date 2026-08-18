@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-900 text-white antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Leaflet requires explicit height on its container */
+  .leaflet-container {
+    width: 100%;
+    height: 100%;
+    background: #0f172a;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/[0.08] backdrop-blur-xl border border-white/[0.12] rounded-2xl;
+  }
+  .glass-strong {
+    @apply bg-white/[0.14] backdrop-blur-2xl border border-white/[0.18] rounded-2xl;
+  }
+}
